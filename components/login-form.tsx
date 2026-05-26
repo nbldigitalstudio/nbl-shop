@@ -16,7 +16,7 @@ export function LoginForm() {
     await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+import { getURL } from "@/lib/url"; emailRedirectTo: `${getURL()}/auth/callback`
       },
     });
   };
