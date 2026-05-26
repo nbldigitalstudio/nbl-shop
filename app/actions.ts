@@ -8,16 +8,16 @@ import {
   getMyStore,
   getCurrentUser,
   getProducts,
-} from "../lib/data";
+} from "@/lib/data";
 
-import { canAddProduct } from "../lib/plans";
-import { createSupabaseServerClient } from "../lib/supabase/server";
+import { canAddProduct } from "@/lib/plans";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   productInputSchema,
   storeInputSchema,
   toProductPayload,
   toStorePayload,
-} from "../lib/validation";
+} from "@/lib/validation";
 
 /* =========================
    STORE
@@ -35,14 +35,14 @@ export async function upsertStore(formData: FormData) {
 
   const payload = toStorePayload(parsed, user.id);
 
-  // buscar tienda del usuario
+  // FIX REAL: evitar "never" de Supabase
   const { data: existing } = await supabase
     .from("stores")
-    .select("*")
+    .select("id, user_id")
     .eq("user_id", user.id)
-    .single();
+    .maybeSingle();
 
-  if (existing) {
+  if (existing?.id) {
     await supabase
       .from("stores")
       .update(payload)
