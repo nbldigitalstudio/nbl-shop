@@ -8,41 +8,46 @@ import {
   getMyStore,
   getCurrentUser,
   getProducts,
-} from "@/lib/data";
+} from "../lib/data";
 
-import { canAddProduct } from "@/lib/plans";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { canAddProduct } from "../lib/plans";
+import { createSupabaseServerClient } from "../lib/supabase/server";
+
 import {
   productInputSchema,
   storeInputSchema,
   toProductPayload,
   toStorePayload,
-} from "@/lib/validation";
+} from "../lib/validation";
+
+import Stripe from "stripe";
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: "2025-02-24.acacia",
+});
 
 /* =========================
    STORE
 ========================= */
 
 export async function upsertStore(formData: FormData) {
-  const user = await getCurrentUser();
+  const user: any = await getCurrentUser();
 
-  if (!user) {
-    redirect("/");
-  }
+  if (!user) redirect("/");
 
   const parsed = storeInputSchema.parse(Object.fromEntries(formData));
+
   const supabase = createSupabaseServerClient();
 
   const payload = toStorePayload(parsed, user.id);
 
-  // FIX DEFINITIVO (evita "never")
-  const { data: existing } = await supabase
+  const { data: existing }: any = await supabase
     .from("stores")
     .select("id")
     .eq("user_id", user.id)
     .maybeSingle();
 
-  if (existing && existing.id) {
+  if (existing?.id) {
     await supabase
       .from("stores")
       .update(payload)
@@ -61,13 +66,12 @@ export async function upsertStore(formData: FormData) {
 ========================= */
 
 export async function upsertProduct(formData: FormData) {
-  const store = await getMyStore();
+  const store: any = await getMyStore();
 
-  if (!store) {
-    redirect("/dashboard/settings");
-  }
+  if (!store) redirect("/dashboard/settings");
 
   const parsed = productInputSchema.parse(Object.fromEntries(formData));
+
   const supabase = createSupabaseServerClient();
 
   const payload = toProductPayload(
@@ -83,8 +87,9 @@ export async function upsertProduct(formData: FormData) {
       .eq("id", parsed.id)
       .eq("store_id", store.id);
   } else {
-    const user = await getCurrentUser();
-    const currentProducts = await getProducts(store.id);
+    const user: any = await getCurrentUser();
+
+    const currentProducts: any = await getProducts(store.id);
 
     const plan = user
       ? await getActiveSubscriptionPlan(user.id, user.email)
@@ -106,7 +111,7 @@ export async function upsertProduct(formData: FormData) {
 ========================= */
 
 export async function deleteProduct(formData: FormData) {
-  const store = await getMyStore();
+  const store: any = await getMyStore();
   const id = String(formData.get("id") ?? "");
 
   if (!store || !id) return;
@@ -121,4 +126,29 @@ export async function deleteProduct(formData: FormData) {
 
   revalidatePath("/dashboard/products");
   revalidatePath(`/store/${store.slug}`);
+}
+
+/* =========================
+   STRIPE CONNECT
+========================= */
+
+export async function createConnectDashboard() {
+  const store: any = await getMyStore();
+
+  const appUrl =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    "http://localhost:3000";
+
+  // ✅ FIX PRINCIPAL AQUÍ
+  if (!store || !store.stripe_account_id) {
+    return redirect(
+      `${appUrl}/dashboard/billing?connect=missing`
+    );
+  }
+
+  const loginLink = await stripe.accounts.createLoginLink(
+    store.stripe_account_id
+  );
+
+  return redirect(loginLink.url);
 }

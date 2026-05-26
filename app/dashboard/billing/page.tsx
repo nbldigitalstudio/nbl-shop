@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { Check, CreditCard, Crown, ExternalLink, WalletCards } from "lucide-react";
 import { LinkButton } from "@/components/button";
 import { EmptyState } from "@/components/empty-state";

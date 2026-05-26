@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { NextRequest, NextResponse } from "next/server";
 import { getSellerStore } from "@/lib/connect";
 import { storeInputSchema, toStorePayload } from "@/lib/validation";

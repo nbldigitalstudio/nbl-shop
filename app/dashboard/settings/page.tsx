@@ -1,4 +1,4 @@
-import { Save } from "lucide-react";
+export const dynamic = "force-dynamic";
 import { upsertStore } from "@/app/actions";
 import { Button } from "@/components/button";
 import { Field, Input, Textarea } from "@/components/field";

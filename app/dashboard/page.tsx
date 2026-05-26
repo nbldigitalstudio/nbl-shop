@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { ArrowUpRight, DollarSign, Package, ReceiptText, ShoppingCart } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
 import { getDashboardMetrics, getMyStore, getOrders, getProducts } from "@/lib/data";

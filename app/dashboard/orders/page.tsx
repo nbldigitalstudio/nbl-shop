@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { EmptyState } from "@/components/empty-state";
 import { getMyStore, getOrders } from "@/lib/data";
 import { formatMoney } from "@/lib/utils";

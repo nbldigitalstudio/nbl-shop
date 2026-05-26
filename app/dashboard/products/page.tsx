@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { EmptyState } from "@/components/empty-state";
 import { ProductForm } from "@/components/product-form";
 import { ProductManagementList } from "@/components/product-management-list";

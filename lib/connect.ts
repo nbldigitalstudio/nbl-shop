@@ -8,15 +8,17 @@ export type SellerStore = {
   name: string;
   slug: string;
   stripe_account_id: string | null;
-  stripe_charges_enabled: boolean;
-  stripe_payouts_enabled: boolean;
-  stripe_details_submitted: boolean;
+  stripe_charges_enabled: boolean | null;
+  stripe_payouts_enabled: boolean | null;
+  stripe_details_submitted: boolean | null;
 };
 
 export async function getSellerStore() {
   const supabase = createSupabaseRouteClient();
-  const { data: userData } = await supabase.auth.getUser();
-  const user = userData.user;
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   if (!user) {
     return { supabase, user: null, store: null };
@@ -24,28 +26,43 @@ export async function getSellerStore() {
 
   const { data: store } = await supabase
     .from("stores")
-    .select("id, owner_id, name, slug, stripe_account_id, stripe_charges_enabled, stripe_payouts_enabled, stripe_details_submitted")
+    .select(
+      "id, owner_id, name, slug, stripe_account_id, stripe_charges_enabled, stripe_payouts_enabled, stripe_details_submitted"
+    )
     .eq("owner_id", user.id)
     .order("created_at", { ascending: true })
     .limit(1)
-    .returns<SellerStore>()
     .maybeSingle();
 
-  return { supabase, user, store };
+  return {
+    supabase,
+    user,
+    store: store ?? null,
+  };
 }
+
+/* =========================
+   STRIPE HELPERS
+========================= */
 
 export function stripeAccountStatus(account: Stripe.Account) {
   return {
     stripe_charges_enabled: Boolean(account.charges_enabled),
     stripe_payouts_enabled: Boolean(account.payouts_enabled),
-    stripe_details_submitted: Boolean(account.details_submitted)
+    stripe_details_submitted: Boolean(account.details_submitted),
   };
 }
 
-export async function syncStripeAccountStatus(storeId: string, accountId: string) {
+export async function syncStripeAccountStatus(
+  storeId: string,
+  accountId: string
+) {
   const stripe = getStripe();
+
   const account = await stripe.accounts.retrieve(accountId);
+
   const status = stripeAccountStatus(account);
+
   const supabase = createSupabaseRouteClient();
 
   await supabase.from("stores").update(status).eq("id", storeId);

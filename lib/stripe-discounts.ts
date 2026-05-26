@@ -4,20 +4,23 @@ export type CheckoutDiscount =
   | { promotion_code: string; coupon?: never }
   | { coupon: string; promotion_code?: never };
 
-export async function resolveCheckoutDiscount(stripe: Stripe, code?: string | null): Promise<CheckoutDiscount | null> {
+export async function resolveCheckoutDiscount(
+  stripe: Stripe,
+  code?: string | null
+): Promise<CheckoutDiscount | null> {
   const normalizedCode = code?.trim();
 
-  if (!normalizedCode) {
-    return null;
-  }
+  if (!normalizedCode) return null;
 
   const promotionCodes = await stripe.promotionCodes.list({
     code: normalizedCode,
     active: true,
-    limit: 1
+    limit: 1,
   });
 
-  const promotionCode = promotionCodes.data.find((item) => item.active && item.coupon.valid);
+  const promotionCode = promotionCodes.data.find(
+    (item) => item.active && item.coupon?.valid
+  );
 
   if (promotionCode) {
     return { promotion_code: promotionCode.id };
@@ -26,7 +29,8 @@ export async function resolveCheckoutDiscount(stripe: Stripe, code?: string | nu
   try {
     const coupon = await stripe.coupons.retrieve(normalizedCode);
 
-    if (!coupon.deleted && coupon.valid) {
+    // 🔥 FIX: Stripe coupon puede ser deleted o no existir
+    if (coupon && !("deleted" in coupon) && coupon.valid) {
       return { coupon: coupon.id };
     }
   } catch {

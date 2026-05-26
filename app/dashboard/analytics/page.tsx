@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getDashboardMetrics, getMyStore, getOrders } from "@/lib/data";
 import { EmptyState } from "@/components/empty-state";
 import { formatMoney } from "@/lib/utils";

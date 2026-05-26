@@ -1,52 +1,43 @@
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
-import { getSellerStore, syncStripeAccountStatus } from "@/lib/connect";
-import { getStripe } from "@/lib/stripe";
+import { getMyStore } from "@/lib/data";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import Stripe from "stripe";
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: "2025-02-24.acacia",
+});
 
 export async function GET() {
-  const { supabase, user, store } = await getSellerStore();
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const store = await getMyStore();
 
-  if (!user) {
-    return NextResponse.redirect(`${appUrl}/login`);
-  }
+  const appUrl =
+    process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
   if (!store) {
     return NextResponse.redirect(`${appUrl}/dashboard/settings`);
   }
 
-  const stripe = getStripe();
-  let accountId = store.stripe_account_id;
+  // 🔥 FIX TS: aseguramos tipo seguro
+  let accountId: string | null = store.stripe_account_id ?? null;
 
   if (!accountId) {
     const account = await stripe.accounts.create({
       type: "express",
-      email: user.email ?? undefined,
-      capabilities: {
-        card_payments: { requested: true },
-        transfers: { requested: true }
-      },
-      business_profile: {
-        name: store.name,
-        url: `${appUrl}/store/${store.slug}`
-      },
-      metadata: {
-        store_id: store.id,
-        owner_id: user.id
-      }
     });
 
+    const supabase = createSupabaseServerClient();
+
+    await supabase
+      .from("stores")
+      .update({ stripe_account_id: account.id })
+      .eq("id", store.id);
+
     accountId = account.id;
-    await supabase.from("stores").update({ stripe_account_id: accountId }).eq("id", store.id);
-  } else {
-    await syncStripeAccountStatus(store.id, accountId);
   }
 
-  const link = await stripe.accountLinks.create({
-    account: accountId,
-    refresh_url: `${appUrl}/api/connect/refresh`,
-    return_url: `${appUrl}/api/connect/return`,
-    type: "account_onboarding"
-  });
+  const loginLink = await stripe.accounts.createLoginLink(accountId);
 
-  return NextResponse.redirect(link.url);
+  return NextResponse.redirect(loginLink.url);
 }

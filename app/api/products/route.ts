@@ -1,9 +1,10 @@
+export const dynamic = "force-dynamic";
+
 import { NextRequest, NextResponse } from "next/server";
 import { isFounderEmail } from "@/lib/access";
 import { getSellerStore } from "@/lib/connect";
 import { canAddProduct } from "@/lib/plans";
 import type { AccessPlan } from "@/lib/plans";
-import type { Plan } from "@/lib/types";
 import { productInputSchema, toProductPayload } from "@/lib/validation";
 
 export async function GET() {
@@ -38,14 +39,20 @@ export async function POST(request: NextRequest) {
   }
 
   if (!store) {
-    return NextResponse.json({ error: "Create a store before adding products." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Create a store before adding products." },
+      { status: 400 }
+    );
   }
 
   const body = await request.json();
   const parsed = productInputSchema.safeParse(body);
 
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json(
+      { error: parsed.error.flatten() },
+      { status: 400 }
+    );
   }
 
   const { count, error: countError } = await supabase
@@ -54,8 +61,15 @@ export async function POST(request: NextRequest) {
     .eq("store_id", store.id);
 
   if (countError) {
-    return NextResponse.json({ error: countError.message }, { status: 400 });
+    return NextResponse.json(
+      { error: countError.message },
+      { status: 400 }
+    );
   }
+
+  // =========================
+  // PLAN LOGIC FIX FINAL
+  // =========================
 
   let plan: AccessPlan = "starter";
 
@@ -69,24 +83,37 @@ export async function POST(request: NextRequest) {
       .in("status", ["trialing", "active"])
       .order("created_at", { ascending: false })
       .limit(1)
-      .returns<{ plan: Plan }>()
       .maybeSingle();
 
-    plan = subscription?.plan ?? "starter";
+    plan = (subscription?.plan as AccessPlan) ?? "starter";
   }
 
-  if (!canAddProduct(plan, count ?? 0)) {
+  const productCount = count ?? 0;
+
+  if (!canAddProduct(plan, productCount)) {
     return NextResponse.json(
       { error: "You reached the 500 product limit" },
       { status: 403 }
     );
   }
 
-  const payload = toProductPayload(parsed.data, store.id, parsed.data.active ?? true);
-  const { data, error } = await supabase.from("products").insert(payload).select("*").single();
+  const payload = toProductPayload(
+    parsed.data,
+    store.id,
+    parsed.data.active ?? true
+  );
+
+  const { data, error } = await supabase
+    .from("products")
+    .insert(payload)
+    .select("*")
+    .single();
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    return NextResponse.json(
+      { error: error.message },
+      { status: 400 }
+    );
   }
 
   return NextResponse.json({ product: data }, { status: 201 });
