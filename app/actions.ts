@@ -35,14 +35,14 @@ export async function upsertStore(formData: FormData) {
 
   const payload = toStorePayload(parsed, user.id);
 
-  // FIX REAL: evitar "never" de Supabase
+  // FIX DEFINITIVO (evita "never")
   const { data: existing } = await supabase
     .from("stores")
-    .select("id, user_id")
+    .select("id")
     .eq("user_id", user.id)
     .maybeSingle();
 
-  if (existing?.id) {
+  if (existing && existing.id) {
     await supabase
       .from("stores")
       .update(payload)
