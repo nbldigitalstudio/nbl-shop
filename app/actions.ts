@@ -15,11 +15,15 @@ export async function upsertStore(formData: FormData) {
 
   const parsed = storeInputSchema.parse(Object.fromEntries(formData));
   const supabase = createSupabaseServerClient();
-  const existing = await getMyStore();
+ const { data: existing } = await supabase
+  .from("stores")
+  .select("*")
+  .eq("id", storeId)
+  .single();
   const payload = toStorePayload(parsed, user.id);
 
   if (existing) {
-    await supabase.from("stores").update(payload).eq("id", existing.id);
+    await supabase.from("stores").update(payload).eq("id", existing?.id);
   } else {
     await supabase.from("stores").insert(payload);
   }
