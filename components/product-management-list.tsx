@@ -6,7 +6,13 @@ import { ProductForm } from "@/components/product-form";
 import type { Product } from "@/lib/types";
 import { formatMoney } from "@/lib/utils";
 
-export function ProductManagementList({ products }: { products: Product[] }) {
+export function ProductManagementList({
+  products,
+  storeId
+}: {
+  products: Product[];
+  storeId?: string;
+}) {
   return (
     <div className="grid gap-4">
       {products.map((product) => (
@@ -33,9 +39,10 @@ export function ProductManagementList({ products }: { products: Product[] }) {
             <Pencil className="size-4 text-ink/50" />
           </summary>
           <div className="mt-5 border-t border-ink/10 pt-5">
-            <ProductForm product={product} />
+            <ProductForm product={product} storeId={storeId} />
             <form action={deleteProduct} className="mt-3">
               <input type="hidden" name="id" value={product.id} />
+              {storeId ? <input type="hidden" name="store_id" value={storeId} /> : null}
               <Button type="submit" variant="danger">
                 <Trash2 className="size-4" />
                 Delete product

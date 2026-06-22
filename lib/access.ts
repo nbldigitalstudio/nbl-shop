@@ -1,9 +1,14 @@
 export type AccessRole = "founder" | "seller";
 
-export const FOUNDER_EMAIL = "your email here";
+function founderEmails() {
+  return (process.env.FOUNDER_EMAILS ?? process.env.FOUNDER_EMAIL ?? "")
+    .split(",")
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
+}
 
 export function isFounderEmail(email?: string | null) {
-  return email?.trim().toLowerCase() === FOUNDER_EMAIL.toLowerCase();
+  return !!email && founderEmails().includes(email.trim().toLowerCase());
 }
 
 export function getAccessRole(email?: string | null): AccessRole {

@@ -1,27 +1,56 @@
 import { cookies } from "next/headers";
-import { createClient } from "@supabase/supabase-js";
-import { createRouteHandlerClient, createServerComponentClient } from "@supabase/auth-helpers-nextjs";
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
 
+/* =========================
+   SERVER CLIENT (USER)
+========================= */
 export function createSupabaseServerClient() {
-  return createServerComponentClient({ cookies });
+  const cookieStore = cookies();
+
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll(cookiesToSet) {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) => {
+              cookieStore.set(name, value, options as CookieOptions);
+            });
+          } catch {}
+        },
+      },
+    }
+  );
 }
 
-export function createSupabaseRouteClient() {
-  return createRouteHandlerClient({ cookies });
-}
+// Route handlers and server components share the same cookie-backed client.
+export const createSupabaseRouteClient = createSupabaseServerClient;
 
+/* =========================
+   ADMIN CLIENT (STRIPE / API)
+========================= */
 export function createSupabaseAdminClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
   if (!url || !key) {
     throw new Error("Supabase admin credentials are not configured.");
   }
 
-  return createClient(url, key, {
+  return createServerClient(url, key, {
+    cookies: {
+      getAll() {
+        return [];
+      },
+      setAll() {},
+    },
     auth: {
       autoRefreshToken: false,
-      persistSession: false
-    }
+      persistSession: false,
+    },
   });
 }

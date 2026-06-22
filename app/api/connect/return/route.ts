@@ -1,46 +1,28 @@
 export const dynamic = "force-dynamic";
 
-import { NextResponse } from "next/server";
-import Stripe from "stripe";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { NextRequest, NextResponse } from "next/server";
+import { getCurrentUser, getMyStore, getStoreForUser } from "@/lib/data";
+import { syncStripeAccountStatus } from "@/lib/connect";
+import { getAppUrl } from "@/lib/url";
 
-export async function GET() {
-  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-    apiVersion: "2025-02-24.acacia",
-  });
+export async function GET(request: NextRequest) {
+  const appUrl = getAppUrl(request.nextUrl.origin);
+  const user = await getCurrentUser();
 
-  const supabase = createSupabaseServerClient();
-
-  const { data: stores, error } = await supabase
-    .from("stores")
-    .select("*")
-    .limit(1);
-
-  const store = Array.isArray(stores) && stores.length ? stores[0] : null;
-
-  const appUrl =
-    process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-
-  if (!store || error) {
-    return NextResponse.redirect(`${appUrl}/dashboard/settings`);
+  if (!user) {
+    return NextResponse.redirect(`${appUrl}/login`);
   }
 
-  let accountId = store.stripe_account_id as string | null;
+  const requestedStoreId = request.nextUrl.searchParams.get("storeId");
+  const store = requestedStoreId
+    ? await getStoreForUser(requestedStoreId)
+    : await getMyStore();
 
-  if (!accountId) {
-    const account = await stripe.accounts.create({
-      type: "express",
-    });
-
-    await supabase
-      .from("stores")
-      .update({ stripe_account_id: account.id })
-      .eq("id", store.id);
-
-    accountId = account.id;
+  if (!store?.stripe_account_id) {
+    return NextResponse.redirect(`${appUrl}/dashboard/stores`);
   }
 
-  const loginLink = await stripe.accounts.createLoginLink(accountId);
+  await syncStripeAccountStatus(store.id, store.stripe_account_id);
 
-  return NextResponse.redirect(loginLink.url);
+  return NextResponse.redirect(`${appUrl}/dashboard/stores/${store.id}/settings?connect=returned`);
 }

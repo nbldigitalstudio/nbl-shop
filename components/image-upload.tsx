@@ -10,12 +10,14 @@ export function ImageUpload({
   name,
   label,
   defaultValue,
-  bucket = "store-assets"
+  bucket = "store-assets",
+  onValueChange
 }: {
   name: string;
   label: string;
   defaultValue?: string | null;
   bucket?: string;
+  onValueChange?: (url: string) => void;
 }) {
   const [url, setUrl] = useState(defaultValue ?? "");
   const [error, setError] = useState("");
@@ -64,6 +66,7 @@ export function ImageUpload({
 
               const { data } = supabase.storage.from(bucket).getPublicUrl(path);
               setUrl(data.publicUrl);
+              onValueChange?.(data.publicUrl);
             });
           }}
         />

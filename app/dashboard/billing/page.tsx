@@ -1,116 +1,63 @@
 export const dynamic = "force-dynamic";
 
-import { Check, CreditCard, Crown, ExternalLink, WalletCards } from "lucide-react";
-import { LinkButton } from "@/components/button";
-import { EmptyState } from "@/components/empty-state";
-import { PlanCheckoutForm } from "@/components/plan-checkout-form";
+import { CreditCard, Crown, ExternalLink, Gift, WalletCards } from "lucide-react";
+import { createGraceCode, redeemGraceCode } from "@/app/actions";
+import { LinkButton, Button } from "@/components/button";
+import { Field, Input } from "@/components/field";
 import { isFounderEmail } from "@/lib/access";
-import { getCurrentUser, getMyStore } from "@/lib/data";
+import { getActiveGraceCodes, getCurrentUser, getMyStore } from "@/lib/data";
 import { plans } from "@/lib/plans";
+import { formatMoney } from "@/lib/utils";
+import { PlanCheckoutForm } from "@/components/plan-checkout-form";
 
-export default async function BillingPage({
-  searchParams
-}: {
-  searchParams?: { error?: string };
-}) {
-  const [store, user] = await Promise.all([getMyStore(), getCurrentUser()]);
-
-  if (!store) {
-    return <EmptyState title="Create your store first" text="Billing and Connect onboarding attach to your store tenant." href="/dashboard/settings" action="Create store" />;
-  }
-
+export default async function BillingPage() {
+  const user = await getCurrentUser();
+  const store = await getMyStore();
   const isFounder = isFounderEmail(user?.email);
-  const connectReady = store.stripe_charges_enabled && store.stripe_payouts_enabled;
-  const connectStatus = [
-    { label: "Details submitted", ready: store.stripe_details_submitted },
-    { label: "Charges enabled", ready: store.stripe_charges_enabled },
-    { label: "Payouts enabled", ready: store.stripe_payouts_enabled }
-  ];
+  const graceCodes = isFounder ? await getActiveGraceCodes() : [];
+  const connectReady = !!store?.stripe_charges_enabled && !!store?.stripe_payouts_enabled;
 
   return (
     <div className="grid gap-6">
-      <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-sm">
+      <section className="rounded-xl border bg-white p-5 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h2 className="text-xl font-black">Stripe Connect</h2>
-            <p className="mt-1 text-sm text-ink/60">Route customer payments directly to your seller bank account.</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {store.stripe_account_id ? (
-              <LinkButton href="/api/connect/dashboard" variant="secondary">
-                <ExternalLink className="size-4" />
-                Stripe dashboard
-              </LinkButton>
-            ) : null}
-            <LinkButton href="/api/connect">
-              <WalletCards className="size-4" />
-              {connectReady ? "Update Stripe" : "Connect Stripe"}
-            </LinkButton>
+          <div><h2 className="text-xl font-bold">Stripe Connect</h2><p className="text-sm text-gray-500">Los pagos de la tienda llegan directamente a su cuenta.</p></div>
+          <div className="flex gap-2">
+            {store?.stripe_account_id ? <LinkButton href={`/api/connect/dashboard?storeId=${store.id}`} variant="secondary"><ExternalLink className="size-4" />Stripe dashboard</LinkButton> : null}
+            <LinkButton href={store ? `/api/connect?storeId=${store.id}` : "/dashboard/stores"}><WalletCards className="size-4" />{connectReady ? "Actualizar Stripe" : "Conectar Stripe"}</LinkButton>
           </div>
         </div>
-        <div className="mt-5 grid gap-3 md:grid-cols-3">
-          {connectStatus.map((item) => (
-            <div key={item.label} className="rounded-md bg-ink/[0.03] p-4">
-              <p className="text-sm font-semibold text-ink/60">{item.label}</p>
-              <p className={item.ready ? "mt-2 font-black text-mint" : "mt-2 font-black text-coral"}>
-                {item.ready ? "Ready" : "Required"}
-              </p>
-            </div>
-          ))}
-        </div>
-        <div className="mt-4 rounded-md bg-ink/[0.03] p-4 text-sm font-semibold">
-          {connectReady
-            ? "Your store can accept payments and receive seller payouts."
-            : "Complete Stripe onboarding before customers can check out."}
+        <div className={`mt-4 rounded-md p-4 text-sm font-medium ${connectReady ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"}`}>
+          {connectReady ? "La tienda puede aceptar pagos y recibir depósitos." : "Completa Stripe onboarding para recibir pagos."}
         </div>
       </section>
+
       {isFounder ? (
-        <section className="rounded-lg border border-mint/30 bg-white p-5 shadow-sm">
-          <div className="flex items-start gap-4">
-            <div className="grid size-10 place-items-center rounded-md bg-mint/10 text-mint">
-              <Crown className="size-5" />
+        <>
+          <section className="rounded-xl border bg-white p-5 shadow-sm">
+            <div className="flex items-start gap-4"><div className="grid size-10 place-items-center rounded-md bg-yellow-100 text-yellow-600"><Crown className="size-5" /></div><div><h2 className="text-xl font-bold">Acceso founder</h2><p className="mt-1 text-sm text-gray-500">Acceso administrativo completo. El estado de billing nunca bloquea tiendas ni clientes.</p></div></div>
+          </section>
+          <section className="rounded-xl border bg-white p-5 shadow-sm">
+            <div className="flex items-center gap-3"><Gift className="size-5 text-blue-600" /><div><h2 className="font-bold">Generar código de gracia</h2><p className="text-sm text-gray-500">Crea un código para extender 15 días el plazo de un cliente.</p></div></div>
+            <form action={createGraceCode} className="mt-4 flex max-w-sm items-end gap-3"><Field label="Días"><Input name="days" type="number" min="1" max="90" defaultValue="15" /></Field><Button type="submit">Generar código</Button></form>
+            {graceCodes.length ? <div className="mt-5 divide-y rounded-lg border">{graceCodes.map((code) => <div key={code.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"><div><p className="font-mono font-bold">{code.code}</p><p className="text-xs text-gray-500">{code.grace_days} días · {code.redemption_count} usos</p></div><span className="rounded-full bg-green-50 px-2.5 py-1 text-xs font-semibold text-green-700">Activo</span></div>)}</div> : null}
+          </section>
+        </>
+      ) : store ? (
+        <>
+          {["past_due", "unpaid", "incomplete"].includes(store.billing_status) ? <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-medium text-amber-800">Tu pago está pendiente. Tu tienda sigue activa. Por favor actualiza tu método de pago.</div> : null}
+          <section><h2 className="text-xl font-bold">Planes oficiales</h2><p className="mt-1 text-sm text-gray-500">Elige pago mensual o anual. Tu acceso y tu tienda nunca se desactivan por un pago tarde.</p>
+            <div className="mt-5 grid gap-4 lg:grid-cols-2">
+              {plans.map((plan) => <div key={plan.id} className={`rounded-xl border bg-white p-5 shadow-sm ${store.plan === plan.id ? "ring-2 ring-blue-500" : ""}`}>
+                <div className="flex items-start justify-between"><div><h3 className="text-lg font-bold">{plan.name}</h3><p className="text-sm text-gray-500">Comisión por venta: {plan.feePercent}%</p></div><CreditCard className="size-5 text-blue-500" /></div>
+                <div className="mt-5 grid grid-cols-2 gap-3"><div><p className="text-xs font-semibold uppercase text-gray-500">Mensual</p><p className="text-2xl font-bold">{formatMoney(plan.monthlyPriceCents)}<span className="text-sm text-gray-500">/mes</span></p></div><div><p className="text-xs font-semibold uppercase text-gray-500">Anual</p><p className="text-2xl font-bold">{formatMoney(plan.annualPriceCents)}<span className="text-sm text-gray-500">/año</span></p><p className="text-xs font-semibold text-green-600">Ahorra {formatMoney(plan.annualSavingsCents)} al año</p></div></div>
+                <ul className="mt-5 grid gap-2 text-sm">{plan.features.map((feature) => <li key={feature}>✔ {feature}</li>)}</ul>
+                <PlanCheckoutForm plan={plan.id} storeId={store.id} />
+              </div>)}
             </div>
-            <div>
-              <h2 className="text-xl font-black">Founder access</h2>
-              <p className="mt-1 text-sm leading-6 text-ink/65">
-                Unlimited features are enabled for this account. No subscription or billing checkout is required.
-              </p>
-            </div>
-          </div>
-        </section>
-      ) : null}
-      {!isFounder ? (
-        <section>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-xl font-black">Subscription plans</h2>
-            {searchParams?.error ? (
-              <p className="rounded-md bg-coral/10 px-3 py-2 text-sm font-bold text-coral">{searchParams.error}</p>
-            ) : null}
-          </div>
-          <div className="mt-5 grid gap-4 lg:grid-cols-3">
-            {plans.map((plan) => (
-              <div key={plan.id} className="rounded-lg border border-ink/10 bg-white p-5 shadow-sm">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h3 className="text-lg font-black">{plan.name}</h3>
-                    <p className="text-sm text-ink/60">{plan.trial}</p>
-                  </div>
-                  <CreditCard className="size-5 text-mint" />
-                </div>
-                <p className="mt-5 text-3xl font-black">{plan.price}<span className="text-sm font-semibold text-ink/55">/mo</span></p>
-                <ul className="mt-5 grid gap-3 text-sm">
-                  {plan.features.map((feature) => (
-                    <li key={feature} className="flex gap-2">
-                      <Check className="size-4 text-mint" />
-                      {feature}
-                    </li>
-                  ))}
-                </ul>
-                <PlanCheckoutForm plan={plan.id} />
-              </div>
-            ))}
-          </div>
-        </section>
+          </section>
+          <section className="rounded-xl border bg-white p-5 shadow-sm"><h2 className="font-bold">Código de gracia</h2><p className="mt-1 text-sm text-gray-500">Si recibiste un código de 15 días, aplícalo aquí. Tu tienda permanece activa con o sin código.</p><form action={redeemGraceCode} className="mt-4 flex max-w-md items-end gap-3"><input type="hidden" name="store_id" value={store.id} /><Field label="Código"><Input name="code" required placeholder="GRACE-XXXXXXXX" /></Field><Button type="submit">Aplicar</Button></form></section>
+        </>
       ) : null}
     </div>
   );

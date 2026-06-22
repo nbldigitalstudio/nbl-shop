@@ -1,78 +1,69 @@
-import type { Plan } from "@/lib/types";
+import type { BillingInterval, Plan } from "@/lib/types";
 
 export type AccessPlan = Plan | "founder";
 
 export const PLANS: Record<
   Plan,
   {
-    price: number;
-    trialDays?: number;
+    name: string;
+    monthlyPriceCents: number;
+    annualPriceCents: number;
+    annualSavingsCents: number;
     maxProducts: number;
+    feePercent: number;
+    features: string[];
+    stripePrices: Record<BillingInterval, string>;
   }
 > = {
-  starter: {
-    price: 19.99,
-    trialDays: 60,
-    maxProducts: 500
-  },
-  business: {
-    price: 39.99,
-    maxProducts: -1
+  basic: {
+    name: "Basic",
+    monthlyPriceCents: 1000,
+    annualPriceCents: 10000,
+    annualSavingsCents: 2000,
+    maxProducts: 500,
+    feePercent: 5,
+    stripePrices: {
+      month: "STRIPE_BASIC_MONTHLY_PRICE_ID",
+      year: "STRIPE_BASIC_YEARLY_PRICE_ID"
+    },
+    features: [
+      "Hasta 500 productos",
+      "Productos, órdenes y tienda",
+      "Checkout y pagos",
+      "Configuración básica"
+    ]
   },
   pro: {
-    price: 79.99,
-    maxProducts: -1
+    name: "Pro",
+    monthlyPriceCents: 3000,
+    annualPriceCents: 25000,
+    annualSavingsCents: 11000,
+    maxProducts: -1,
+    feePercent: 2,
+    stripePrices: {
+      month: "STRIPE_PRO_MONTHLY_PRICE_ID",
+      year: "STRIPE_PRO_YEARLY_PRICE_ID"
+    },
+    features: ["Productos ilimitados", "Acceso completo", "Comisión reducida de 2%"]
   }
 };
 
-export const plans: Array<{
-  id: Plan;
-  name: string;
-  price: string;
-  trial: string;
-  maxProducts: number;
-  stripeEnv: string;
-  features: string[];
-}> = [
-  {
-    id: "starter",
-    name: "Starter",
-    price: `$${PLANS.starter.price.toFixed(2)}`,
-    trial: `${PLANS.starter.trialDays} days free trial`,
-    maxProducts: PLANS.starter.maxProducts,
-    stripeEnv: "STRIPE_STARTER_PRICE_ID",
-    features: ["1 storefront", "Up to 500 products", "Stripe Connect payouts"]
-  },
-  {
-    id: "business",
-    name: "Business",
-    price: `$${PLANS.business.price.toFixed(2)}`,
-    trial: "For growing teams",
-    maxProducts: PLANS.business.maxProducts,
-    stripeEnv: "STRIPE_BUSINESS_PRICE_ID",
-    features: ["Unlimited products", "Advanced analytics", "Priority support"]
-  },
-  {
-    id: "pro",
-    name: "Pro",
-    price: `$${PLANS.pro.price.toFixed(2)}`,
-    trial: "For scaled sellers",
-    maxProducts: PLANS.pro.maxProducts,
-    stripeEnv: "STRIPE_PRO_PRICE_ID",
-    features: ["Unlimited products", "Multiple team seats", "Launch support"]
-  }
-];
+export const plans = (Object.keys(PLANS) as Plan[]).map((id) => ({ id, ...PLANS[id] }));
 
-export function getStripePriceId(plan: Plan) {
-  const selected = plans.find((item) => item.id === plan);
-  return selected ? process.env[selected.stripeEnv] : undefined;
+export function getStripePriceId(plan: Plan, interval: BillingInterval) {
+  return process.env[PLANS[plan].stripePrices[interval]];
+}
+
+export function getPlanFeePercent(plan: Plan) {
+  return PLANS[plan].feePercent;
+}
+
+export function normalizePlan(value?: string | null): Plan {
+  return value === "pro" ? "pro" : "basic";
 }
 
 export function canAddProduct(plan: AccessPlan, currentProductCount: number) {
-  if (plan === "founder") {
-    return true;
-  }
-
+  if (plan === "founder") return true;
   const maxProducts = PLANS[plan].maxProducts;
   return maxProducts < 0 || currentProductCount < maxProducts;
 }

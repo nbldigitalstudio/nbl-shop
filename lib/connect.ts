@@ -1,5 +1,6 @@
 import type Stripe from "stripe";
-import { createSupabaseRouteClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient, createSupabaseRouteClient } from "@/lib/supabase/server";
+import { getMyStore, getStoreForUser } from "@/lib/data";
 import { getStripe } from "@/lib/stripe";
 
 export type SellerStore = {
@@ -11,9 +12,10 @@ export type SellerStore = {
   stripe_charges_enabled: boolean | null;
   stripe_payouts_enabled: boolean | null;
   stripe_details_submitted: boolean | null;
+  plan?: string;
 };
 
-export async function getSellerStore() {
+export async function getSellerStore(storeId?: string | null) {
   const supabase = createSupabaseRouteClient();
 
   const {
@@ -24,20 +26,12 @@ export async function getSellerStore() {
     return { supabase, user: null, store: null };
   }
 
-  const { data: store } = await supabase
-    .from("stores")
-    .select(
-      "id, owner_id, name, slug, stripe_account_id, stripe_charges_enabled, stripe_payouts_enabled, stripe_details_submitted"
-    )
-    .eq("owner_id", user.id)
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
+  const store = storeId ? await getStoreForUser(storeId) : await getMyStore();
 
   return {
     supabase,
     user,
-    store: store ?? null,
+    store: (store ?? null) as SellerStore | null,
   };
 }
 
@@ -63,9 +57,13 @@ export async function syncStripeAccountStatus(
 
   const status = stripeAccountStatus(account);
 
-  const supabase = createSupabaseRouteClient();
+  const supabase = createSupabaseAdminClient();
 
-  await supabase.from("stores").update(status).eq("id", storeId);
+  const { error } = await supabase.from("stores").update(status).eq("id", storeId);
+
+  if (error) {
+    throw new Error(`Could not update Stripe status: ${error.message}`);
+  }
 
   return status;
 }

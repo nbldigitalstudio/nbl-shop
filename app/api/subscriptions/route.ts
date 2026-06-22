@@ -3,40 +3,44 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { isFounderEmail } from "@/lib/access";
+import { getStoreForUser } from "@/lib/data";
 import { createSupabaseRouteClient } from "@/lib/supabase/server";
 import { getStripe } from "@/lib/stripe";
 import { resolveCheckoutDiscount } from "@/lib/stripe-discounts";
-import { getStripePriceId, PLANS } from "@/lib/plans";
+import { getStripePriceId } from "@/lib/plans";
+import { getAppUrl } from "@/lib/url";
 
-const schema = z.enum(["starter", "business", "pro"]);
+const planSchema = z.enum(["basic", "pro"]);
+const intervalSchema = z.enum(["month", "year"]);
+const storeIdSchema = z.string().uuid();
 
 export async function GET(request: NextRequest) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const appUrl = getAppUrl(request.nextUrl.origin);
   const supabase = createSupabaseRouteClient();
   const { data } = await supabase.auth.getUser();
   const user = data.user;
+  if (!user?.email) return NextResponse.redirect(`${appUrl}/login`);
+  if (isFounderEmail(user.email)) return NextResponse.redirect(`${appUrl}/dashboard/billing?founder=active`);
 
-  if (!user?.email) {
-    return NextResponse.redirect(appUrl);
+  const parsedPlan = planSchema.safeParse(request.nextUrl.searchParams.get("plan"));
+  const parsedInterval = intervalSchema.safeParse(request.nextUrl.searchParams.get("interval"));
+  const parsedStoreId = storeIdSchema.safeParse(request.nextUrl.searchParams.get("storeId"));
+  if (!parsedPlan.success || !parsedInterval.success || !parsedStoreId.success) {
+    return NextResponse.json({ error: "Invalid subscription selection." }, { status: 400 });
   }
+  const store = await getStoreForUser(parsedStoreId.data);
+  if (!store) return NextResponse.json({ error: "Store not found." }, { status: 404 });
 
-  if (isFounderEmail(user.email)) {
-    return NextResponse.redirect(`${appUrl}/dashboard/billing?founder=active`);
-  }
-
-  const plan = schema.parse(request.nextUrl.searchParams.get("plan"));
-  const promoCode = request.nextUrl.searchParams.get("promoCode")?.trim();
-  const price = getStripePriceId(plan);
-
+  const price = getStripePriceId(parsedPlan.data, parsedInterval.data);
   if (!price) {
-    return NextResponse.json({ error: `Missing Stripe price for ${plan}.` }, { status: 400 });
+    return NextResponse.json({ error: `Missing Stripe ${parsedPlan.data} ${parsedInterval.data} price.` }, { status: 400 });
   }
 
   const stripe = getStripe();
+  const promoCode = request.nextUrl.searchParams.get("promoCode")?.trim();
   const discount = await resolveCheckoutDiscount(stripe, promoCode);
-
   if (promoCode && !discount) {
-    return NextResponse.redirect(`${appUrl}/dashboard/billing?error=${encodeURIComponent("Invalid promo code")}`);
+    return NextResponse.redirect(`${appUrl}/dashboard/billing?error=${encodeURIComponent("Código de descuento inválido")}`);
   }
 
   const session = await stripe.checkout.sessions.create({
@@ -45,12 +49,9 @@ export async function GET(request: NextRequest) {
     line_items: [{ price, quantity: 1 }],
     allow_promotion_codes: discount ? undefined : true,
     discounts: discount ? [discount] : undefined,
+    metadata: { user_id: user.id, store_id: store.id, plan: parsedPlan.data, interval: parsedInterval.data },
     subscription_data: {
-      trial_period_days: PLANS[plan].trialDays,
-      metadata: {
-        user_id: user.id,
-        plan
-      }
+      metadata: { user_id: user.id, store_id: store.id, plan: parsedPlan.data, interval: parsedInterval.data }
     },
     success_url: `${appUrl}/dashboard/billing?subscription=success`,
     cancel_url: `${appUrl}/dashboard/billing?subscription=cancelled`

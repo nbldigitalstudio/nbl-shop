@@ -1,51 +1,89 @@
 import { z } from "zod";
-import { slugify } from "@/lib/utils";
+
+/* =========================
+   STORE
+========================= */
 
 export const storeInputSchema = z.object({
-  name: z.string().trim().min(2, "Store name is required.").max(80),
-  slug: z
-    .string()
-    .trim()
-    .optional()
-    .transform((value) => slugify(value || "")),
-  logo_url: z.string().url().or(z.literal("")).optional(),
-  banner_url: z.string().url().or(z.literal("")).optional(),
-  theme_color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Use a valid hex color."),
-  description: z.string().trim().max(500).optional()
+  id: z.string().optional(),
+  name: z.string().min(1),
+  slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+  description: z.string().optional().nullable(),
+  logo_url: z.string().optional().nullable(),
+  banner_url: z.string().optional().nullable(),
+  theme_color: z.string().regex(/^#[0-9A-Fa-f]{6}$/).default("#18a986"),
 });
+
+export const founderStoreWizardSchema = z.object({
+  name: z.string().trim().min(2).max(100),
+  slug: z.string().trim().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+  category: z.string().trim().min(2).max(80),
+  logo_url: z.string().url().optional().or(z.literal("")),
+  description: z.string().trim().max(1000).optional(),
+  owner_name: z.string().trim().min(2).max(100),
+  owner_email: z.string().trim().email(),
+  owner_phone: z.string().trim().max(30).optional(),
+  plan: z.enum(["basic", "pro"]),
+  billing_interval: z.enum(["month", "year"])
+});
+
+/* =========================
+   PRODUCT
+========================= */
 
 export const productInputSchema = z.object({
-  id: z.string().uuid().optional(),
-  name: z.string().trim().min(2, "Product name is required.").max(120),
-  price: z.coerce.number().min(0.5, "Price must be at least $0.50."),
-  image_url: z.string().url().or(z.literal("")).optional(),
-  description: z.string().trim().max(1000).optional(),
+  id: z.string().optional(),
+  store_id: z.string().optional(),
+
+  name: z.string().min(1),
+
+  // 👇 IMPORTANTE: el form manda string → esto lo corrige
+  price: z.coerce.number().min(0.5),
+
   stock: z.coerce.number().int().min(0),
-  active: z.boolean().optional()
+
+  description: z.string().optional().nullable(),
+  image_url: z.string().optional().nullable(),
+
+  // 🔥 FIX IMPORTANTE (ANTES ESTABA BIEN PERO INCOMPLETO)
+  active: z
+    .preprocess((val) => {
+      if (val === "on" || val === "1" || val === "true" || val === true) {
+        return true;
+      }
+      return false;
+    }, z.boolean()),
 });
 
-export function toStorePayload(input: z.infer<typeof storeInputSchema>, ownerId: string) {
-  const slug = input.slug || slugify(input.name);
+/* =========================
+   PAYLOAD HELPERS
+========================= */
 
+export function toStorePayload(data: any, userId: string) {
   return {
-    owner_id: ownerId,
-    name: input.name,
-    slug,
-    logo_url: input.logo_url || null,
-    banner_url: input.banner_url || null,
-    theme_color: input.theme_color,
-    description: input.description || null
+    name: data.name,
+    slug: data.slug,
+    description: data.description || null,
+    logo_url: data.logo_url || null,
+    banner_url: data.banner_url || null,
+    theme_color: data.theme_color,
+    owner_id: userId,
   };
 }
 
-export function toProductPayload(input: z.infer<typeof productInputSchema>, storeId: string, active: boolean) {
+/* 🔥 FIX CLAVE: asegura consistencia con DB */
+export function toProductPayload(
+  data: any,
+  storeId: string,
+  active: boolean = data.active
+) {
   return {
     store_id: storeId,
-    name: input.name,
-    price_cents: Math.round(input.price * 100),
-    image_url: input.image_url || null,
-    description: input.description || null,
-    stock: input.stock,
-    active
+    name: data.name,
+    price_cents: Math.round(Number(data.price) * 100),
+    stock: Number(data.stock),
+    description: data.description ?? null,
+    image_url: data.image_url ?? null,
+    active,
   };
 }

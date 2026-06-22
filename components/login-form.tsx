@@ -12,21 +12,59 @@ export function LoginForm() {
 
   const supabase = createSupabaseBrowserClient();
 
+  const redirectURL = () =>
+    process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") || window.location.origin;
+
+  // =========================
+  // GOOGLE LOGIN
+  // =========================
   const signInWithGoogle = async () => {
-    await supabase.auth.signInWithOAuth({
+    const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-import { getURL } from "@/lib/url"; emailRedirectTo: `${getURL()}/auth/callback`
+        redirectTo: `${redirectURL()}/auth/callback`,
       },
     });
+
+    if (error) setMessage(error.message);
   };
 
+  // =========================
+  // FACEBOOK LOGIN
+  // =========================
   const signInWithFacebook = async () => {
-    await supabase.auth.signInWithOAuth({
+    const { error } = await supabase.auth.signInWithOAuth({
       provider: "facebook",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: `${redirectURL()}/auth/callback`,
       },
+    });
+
+    if (error) setMessage(error.message);
+  };
+
+  // =========================
+  // EMAIL LOGIN (OTP)
+  // =========================
+  const handleEmailLogin = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const form = new FormData(event.currentTarget);
+    const email = String(form.get("email") ?? "");
+
+    startTransition(async () => {
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          emailRedirectTo: `${redirectURL()}/auth/callback`,
+        },
+      });
+
+      setMessage(
+        error
+          ? error.message
+          : "Check your email for the sign-in link."
+      );
     });
   };
 
@@ -34,27 +72,14 @@ import { getURL } from "@/lib/url"; emailRedirectTo: `${getURL()}/auth/callback`
     <div className="mt-6 grid gap-4">
 
       {/* EMAIL LOGIN */}
-      <form
-        className="grid gap-4"
-        onSubmit={(event) => {
-          event.preventDefault();
-          const form = new FormData(event.currentTarget);
-          const email = String(form.get("email") ?? "");
-
-          startTransition(async () => {
-            const { error } = await supabase.auth.signInWithOtp({
-              email,
-              options: {
-                emailRedirectTo: `${window.location.origin}/auth/callback`,
-              },
-            });
-
-            setMessage(error ? error.message : "Check your email for the sign-in link.");
-          });
-        }}
-      >
+      <form className="grid gap-4" onSubmit={handleEmailLogin}>
         <Field label="Email">
-          <Input name="email" type="email" required placeholder="you@example.com" />
+          <Input
+            name="email"
+            type="email"
+            required
+            placeholder="you@example.com"
+          />
         </Field>
 
         <Button type="submit" disabled={isPending}>
@@ -64,22 +89,27 @@ import { getURL } from "@/lib/url"; emailRedirectTo: `${getURL()}/auth/callback`
       </form>
 
       {/* DIVIDER */}
-      <div className="text-center text-sm text-ink/40">or continue with</div>
+      <div className="text-center text-sm text-gray-400">
+        or continue with
+      </div>
 
-      {/* OAUTH BUTTONS */}
+      {/* GOOGLE */}
       <Button type="button" onClick={signInWithGoogle}>
         <Chrome className="size-4" />
         Continue with Google
       </Button>
 
+      {/* FACEBOOK */}
       <Button type="button" onClick={signInWithFacebook}>
         Continue with Facebook
       </Button>
 
       {/* MESSAGE */}
-      {message ? (
-        <p className="text-sm font-semibold text-ink/65">{message}</p>
-      ) : null}
+      {message && (
+        <p className="text-sm font-medium text-gray-600">
+          {message}
+        </p>
+      )}
     </div>
   );
 }

@@ -126,6 +126,7 @@ export function Storefront({ store, products }: { store: Store; products: Produc
           <span className="text-xl font-black">{formatMoney(total)}</span>
         </div>
         <form action="/api/checkout" method="POST" className="mt-5">
+          <input type="hidden" name="store_id" value={store.id} />
           <input type="hidden" name="cart" value={JSON.stringify(cart)} />
           <Button type="submit" disabled={!cart.length} className="w-full" style={{ backgroundColor: store.theme_color }}>
             Checkout

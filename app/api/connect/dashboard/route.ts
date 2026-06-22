@@ -1,54 +1,28 @@
 export const dynamic = "force-dynamic";
 
-import { NextResponse } from "next/server";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import Stripe from "stripe";
+import { NextRequest, NextResponse } from "next/server";
+import { getCurrentUser, getMyStore, getStoreForUser } from "@/lib/data";
+import { getStripe } from "@/lib/stripe";
+import { getAppUrl } from "@/lib/url";
 
-const stripeSecret = process.env.STRIPE_SECRET_KEY;
+export async function GET(request: NextRequest) {
+  const appUrl = getAppUrl(request.nextUrl.origin);
+  const user = await getCurrentUser();
 
-const stripe = stripeSecret
-  ? new Stripe(stripeSecret, {
-      apiVersion: "2025-02-24.acacia",
-    })
-  : null;
-
-export async function GET() {
-  const supabase = createSupabaseServerClient();
-
-  const { data: stores, error } = await supabase
-    .from("stores")
-    .select("*")
-    .limit(1);
-
-  const store = Array.isArray(stores) && stores.length ? stores[0] : null;
-
-  const appUrl =
-    process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-
-  if (!store || error) {
-    return NextResponse.redirect(`${appUrl}/dashboard/settings`);
+  if (!user) {
+    return NextResponse.redirect(`${appUrl}/login`);
   }
 
-  if (!stripe) {
-    throw new Error("Missing STRIPE_SECRET_KEY");
+  const requestedStoreId = request.nextUrl.searchParams.get("storeId");
+  const store = requestedStoreId
+    ? await getStoreForUser(requestedStoreId)
+    : await getMyStore();
+
+  if (!store?.stripe_account_id) {
+    return NextResponse.redirect(`${appUrl}/dashboard/stores`);
   }
 
-  let accountId = store.stripe_account_id as string | null;
-
-  if (!accountId) {
-    const account = await stripe.accounts.create({
-      type: "express",
-    });
-
-    await supabase
-      .from("stores")
-      .update({ stripe_account_id: account.id })
-      .eq("id", store.id);
-
-    accountId = account.id;
-  }
-
-  const loginLink = await stripe.accounts.createLoginLink(accountId);
+  const loginLink = await getStripe().accounts.createLoginLink(store.stripe_account_id);
 
   return NextResponse.redirect(loginLink.url);
 }

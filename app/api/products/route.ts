@@ -1,10 +1,9 @@
 export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
-import { isFounderEmail } from "@/lib/access";
 import { getSellerStore } from "@/lib/connect";
-import { canAddProduct } from "@/lib/plans";
-import type { AccessPlan } from "@/lib/plans";
+import { canAddProduct, normalizePlan } from "@/lib/plans";
+import { isFounderEmail } from "@/lib/access";
 import { productInputSchema, toProductPayload } from "@/lib/validation";
 
 export async function GET() {
@@ -71,22 +70,7 @@ export async function POST(request: NextRequest) {
   // PLAN LOGIC FIX FINAL
   // =========================
 
-  let plan: AccessPlan = "starter";
-
-  if (isFounderEmail(user.email)) {
-    plan = "founder";
-  } else {
-    const { data: subscription } = await supabase
-      .from("subscriptions")
-      .select("plan")
-      .eq("user_id", user.id)
-      .in("status", ["trialing", "active"])
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    plan = (subscription?.plan as AccessPlan) ?? "starter";
-  }
+  const plan = isFounderEmail(user.email) ? "founder" : normalizePlan((store as { plan?: string }).plan);
 
   const productCount = count ?? 0;
 

@@ -4,6 +4,7 @@ import Stripe from "stripe";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import { getStripe } from "@/lib/stripe";
 import { stripeAccountStatus } from "@/lib/connect";
+import { normalizePlan } from "@/lib/plans";
 
 export async function POST(request: NextRequest) {
   const body = await request.text();
@@ -23,8 +24,12 @@ export async function POST(request: NextRequest) {
 
   const supabase = createSupabaseAdminClient();
 
-  if (event.type === "checkout.session.completed") {
+  if (
+    event.type === "checkout.session.completed" ||
+    event.type === "checkout.session.async_payment_succeeded"
+  ) {
     const session = event.data.object as Stripe.Checkout.Session;
+    const shipping = session.collected_information?.shipping_details ?? session.shipping_details;
     let cart: Array<{ productId: string; quantity: number }> = [];
     try {
       cart = JSON.parse(session.metadata?.cart ?? "[]");
@@ -32,20 +37,34 @@ export async function POST(request: NextRequest) {
       cart = [];
     }
 
-    await supabase
+    const paymentStatus = session.payment_status;
+    const { data: paidOrder } = await supabase
       .from("orders")
       .update({
-        status: "paid",
+        status: paymentStatus === "paid" ? "paid" : "pending",
+        payment_status: paymentStatus,
         customer_email: session.customer_details?.email ?? session.customer_email ?? null,
-        amount_total_cents: session.amount_total ?? 0
+        amount_total_cents: session.amount_total ?? 0,
+        shipping_name: shipping?.name ?? session.customer_details?.name ?? null,
+        shipping_address: [shipping?.address?.line1, shipping?.address?.line2].filter(Boolean).join(", ") || null,
+        shipping_city: shipping?.address?.city ?? null,
+        shipping_state: shipping?.address?.state ?? null,
+        shipping_zip: shipping?.address?.postal_code ?? null,
+        shipping_country: shipping?.address?.country ?? null,
+        shipping_status: "pending"
       })
-      .eq("stripe_checkout_session_id", session.id);
+      .eq("stripe_checkout_session_id", session.id)
+      .neq("payment_status", "paid")
+      .select("id")
+      .maybeSingle();
 
-    for (const item of cart) {
-      await supabase.rpc("decrement_product_stock", {
-        product_id_input: item.productId,
-        quantity_input: item.quantity
-      });
+    if (paidOrder && paymentStatus === "paid") {
+      for (const item of cart) {
+        await supabase.rpc("decrement_product_stock", {
+          product_id_input: item.productId,
+          quantity_input: item.quantity
+        });
+      }
     }
   }
 
@@ -63,21 +82,59 @@ export async function POST(request: NextRequest) {
     event.type === "customer.subscription.deleted"
   ) {
     const subscription = event.data.object as Stripe.Subscription;
-    const plan = subscription.metadata.plan;
+    const plan = normalizePlan(subscription.metadata.plan);
     const userId = subscription.metadata.user_id;
+    const storeId = subscription.metadata.store_id;
+    const interval = subscription.metadata.interval === "year" ? "year" : "month";
 
-    if (userId && (plan === "starter" || plan === "business" || plan === "pro")) {
+    if (userId && storeId) {
       await supabase.from("subscriptions").upsert(
         {
           user_id: userId,
+          store_id: storeId,
           stripe_customer_id: String(subscription.customer),
           stripe_subscription_id: subscription.id,
           plan,
+          billing_interval: interval,
           status: subscription.status,
           current_period_end: new Date(subscription.current_period_end * 1000).toISOString()
         },
         { onConflict: "stripe_subscription_id" }
       );
+
+      // Billing status is informational only. Never disable the store or its checkout.
+      await supabase
+        .from("stores")
+        .update({ plan, billing_status: subscription.status })
+        .eq("id", storeId);
+    }
+  }
+
+  if (event.type === "invoice.payment_failed" || event.type === "invoice.paid") {
+    const invoice = event.data.object as Stripe.Invoice & {
+      subscription?: string | Stripe.Subscription | null;
+      parent?: { subscription_details?: { subscription?: string | Stripe.Subscription | null } } | null;
+    };
+    const subscriptionReference = invoice.subscription ?? invoice.parent?.subscription_details?.subscription;
+    const subscriptionId = typeof subscriptionReference === "string"
+      ? subscriptionReference
+      : subscriptionReference?.id;
+
+    if (subscriptionId) {
+      const billingStatus = event.type === "invoice.paid" ? "active" : "past_due";
+      const { data: subscriptionRecord } = await supabase
+        .from("subscriptions")
+        .update({ status: billingStatus })
+        .eq("stripe_subscription_id", subscriptionId)
+        .select("store_id")
+        .maybeSingle();
+
+      if (subscriptionRecord?.store_id) {
+        await supabase
+          .from("stores")
+          .update({ billing_status: billingStatus })
+          .eq("id", subscriptionRecord.store_id);
+      }
     }
   }
 
