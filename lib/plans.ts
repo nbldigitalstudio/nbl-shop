@@ -10,7 +10,7 @@ export const PLANS: Record<
     annualPriceCents: number;
     annualSavingsCents: number;
     maxProducts: number;
-    feePercent: number;
+    salesFeeLabel: string;
     features: string[];
     stripePrices: Record<BillingInterval, string>;
   }
@@ -21,7 +21,7 @@ export const PLANS: Record<
     annualPriceCents: 10000,
     annualSavingsCents: 2000,
     maxProducts: 500,
-    feePercent: 5,
+    salesFeeLabel: "Sin comisión por venta",
     stripePrices: {
       month: "STRIPE_BASIC_MONTHLY_PRICE_ID",
       year: "STRIPE_BASIC_YEARLY_PRICE_ID"
@@ -30,7 +30,8 @@ export const PLANS: Record<
       "Hasta 500 productos",
       "Productos, órdenes y tienda",
       "Checkout y pagos",
-      "Configuración básica"
+      "Configuración básica",
+      "Sin comisión por venta"
     ]
   },
   pro: {
@@ -39,12 +40,12 @@ export const PLANS: Record<
     annualPriceCents: 25000,
     annualSavingsCents: 11000,
     maxProducts: -1,
-    feePercent: 2,
+    salesFeeLabel: "Sin comisión por venta",
     stripePrices: {
       month: "STRIPE_PRO_MONTHLY_PRICE_ID",
       year: "STRIPE_PRO_YEARLY_PRICE_ID"
     },
-    features: ["Productos ilimitados", "Acceso completo", "Comisión reducida de 2%"]
+    features: ["Productos ilimitados", "Acceso completo", "Sin comisión por venta"]
   }
 };
 
@@ -52,10 +53,6 @@ export const plans = (Object.keys(PLANS) as Plan[]).map((id) => ({ id, ...PLANS[
 
 export function getStripePriceId(plan: Plan, interval: BillingInterval) {
   return process.env[PLANS[plan].stripePrices[interval]];
-}
-
-export function getPlanFeePercent(plan: Plan) {
-  return PLANS[plan].feePercent;
 }
 
 export function normalizePlan(value?: string | null): Plan {

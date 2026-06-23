@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Mail, Chrome } from "lucide-react";
+import { Mail, Chrome, Facebook } from "lucide-react";
 import { Button } from "@/components/button";
 import { Field, Input } from "@/components/field";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -63,7 +63,7 @@ export function LoginForm() {
       setMessage(
         error
           ? error.message
-          : "Check your email for the sign-in link."
+          : "Revisa tu correo: te enviamos un enlace para entrar."
       );
     });
   };
@@ -73,35 +73,36 @@ export function LoginForm() {
 
       {/* EMAIL LOGIN */}
       <form className="grid gap-4" onSubmit={handleEmailLogin}>
-        <Field label="Email">
+        <Field label="Tu correo electrónico">
           <Input
             name="email"
             type="email"
             required
-            placeholder="you@example.com"
+            placeholder="tu@negocio.com"
           />
         </Field>
 
         <Button type="submit" disabled={isPending}>
           <Mail className="size-4" />
-          {isPending ? "Sending..." : "Send sign-in link"}
+          {isPending ? "Enviando..." : "Enviarme un enlace mágico"}
         </Button>
       </form>
 
       {/* DIVIDER */}
       <div className="text-center text-sm text-gray-400">
-        or continue with
+        o continúa con
       </div>
 
       {/* GOOGLE */}
       <Button type="button" onClick={signInWithGoogle}>
         <Chrome className="size-4" />
-        Continue with Google
+        Continuar con Google
       </Button>
 
       {/* FACEBOOK */}
       <Button type="button" onClick={signInWithFacebook}>
-        Continue with Facebook
+        <Facebook className="size-4" />
+        Continuar con Facebook
       </Button>
 
       {/* MESSAGE */}

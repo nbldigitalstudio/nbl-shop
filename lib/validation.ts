@@ -24,7 +24,8 @@ export const founderStoreWizardSchema = z.object({
   owner_email: z.string().trim().email(),
   owner_phone: z.string().trim().max(30).optional(),
   plan: z.enum(["basic", "pro"]),
-  billing_interval: z.enum(["month", "year"])
+  billing_interval: z.enum(["month", "year"]),
+  promo_code: z.string().trim().max(100).optional()
 });
 
 /* =========================

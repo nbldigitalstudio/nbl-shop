@@ -12,7 +12,7 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: "NBL Shop",
-  description: "Multi-tenant ecommerce stores with Stripe Connect payouts."
+  description: "Tiendas online creadas con amor para pequeños negocios y personas que están comenzando."
 };
 
 export default function RootLayout({
@@ -21,7 +21,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="es">
       <body className={inter.className}>{children}</body>
     </html>
   );

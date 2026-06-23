@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
-import { platformFee, getStripe } from "@/lib/stripe";
-import { getPlanFeePercent, normalizePlan } from "@/lib/plans";
+import { getStripe } from "@/lib/stripe";
+import { normalizePlan } from "@/lib/plans";
+import { calculateShippingAmountCents } from "@/lib/shipping";
 import { getAppUrl as resolveAppUrl } from "@/lib/url";
 
 const cartSchema = z.array(
@@ -165,16 +166,17 @@ export async function POST(request: NextRequest) {
     quantity: number;
   }[];
 
-  const total = items.reduce(
+  const subtotal = items.reduce(
     (sum, item) => sum + item.product.price_cents * item.quantity,
     0
   );
+  const shippingAmount = calculateShippingAmountCents(subtotal);
+  const total = subtotal + shippingAmount;
 
   const plan = normalizePlan(store.plan);
-  const feePercent = getPlanFeePercent(plan);
-  const fee = platformFee(total, feePercent);
+  const applicationFeeCents = 0;
 
-  if (total <= 0) {
+  if (subtotal <= 0) {
     return checkoutError(
       "Checkout total must be greater than zero.",
       400,
@@ -187,8 +189,10 @@ export async function POST(request: NextRequest) {
     .from("orders")
     .insert({
       store_id: store.id,
+      subtotal_cents: subtotal,
+      shipping_amount_cents: shippingAmount,
       amount_total_cents: total,
-      application_fee_cents: fee,
+      application_fee_cents: applicationFeeCents,
       status: "pending",
       payment_status: "unpaid",
       shipping_status: "pending",
@@ -233,20 +237,33 @@ export async function POST(request: NextRequest) {
       client_reference_id: order.id,
       payment_method_types: ["card"],
 
-      line_items: items.map((item) => ({
-        quantity: item.quantity,
-        price_data: {
-          currency: "usd",
-          unit_amount: item.product.price_cents,
-          product_data: {
-            name: item.product.name,
-            description: item.product.description?.trim() || undefined,
-            images: item.product.image_url
-              ? [item.product.image_url]
-              : undefined,
+      line_items: [
+        ...items.map((item) => ({
+          quantity: item.quantity,
+          price_data: {
+            currency: "usd",
+            unit_amount: item.product.price_cents,
+            product_data: {
+              name: item.product.name,
+              description: item.product.description?.trim() || undefined,
+              images: item.product.image_url
+                ? [item.product.image_url]
+                : undefined,
+            },
+          },
+        })),
+        {
+          quantity: 1,
+          price_data: {
+            currency: "usd",
+            unit_amount: shippingAmount,
+            product_data: {
+              name: "Shipping",
+              description: "Standard shipping",
+            },
           },
         },
-      })),
+      ],
 
       automatic_tax: {
         enabled: false,
@@ -257,7 +274,6 @@ export async function POST(request: NextRequest) {
       },
 
       payment_intent_data: {
-        application_fee_amount: fee,
         transfer_data: {
           destination: store.stripe_account_id,
         },
@@ -270,9 +286,11 @@ export async function POST(request: NextRequest) {
       metadata: {
         store_id: store.id,
         order_id: order.id,
-        application_fee_cents: String(fee),
+        subtotal_cents: String(subtotal),
+        shipping_amount_cents: String(shippingAmount),
+        application_fee_cents: String(applicationFeeCents),
         plan,
-        fee_percent: String(feePercent),
+        platform_fee: "none",
         cart: JSON.stringify(cart.data),
       },
 

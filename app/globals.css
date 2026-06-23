@@ -12,8 +12,13 @@
 
 body {
   margin: 0;
-  background: #f7f5ef;
+  background: #fffaf7;
   color: #152020;
+}
+
+::selection {
+  background: #fecdd3;
+  color: #4b3542;
 }
 
 a {
@@ -28,5 +33,5 @@ select {
 }
 
 .focus-ring {
-  @apply focus:outline-none focus:ring-2 focus:ring-mint focus:ring-offset-2;
+  @apply focus:outline-none focus:ring-2 focus:ring-rose-300 focus:ring-offset-2;
 }

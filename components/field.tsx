@@ -20,7 +20,7 @@ export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
       className={cx(
-        "focus-ring h-11 rounded-md border border-ink/10 bg-white px-3 text-sm shadow-sm",
+        "focus-ring h-11 rounded-xl border border-stone-200 bg-white px-3 text-sm shadow-sm",
         props.className
       )}
       {...props}
@@ -32,7 +32,7 @@ export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return (
     <textarea
       className={cx(
-        "focus-ring min-h-28 rounded-md border border-ink/10 bg-white px-3 py-3 text-sm shadow-sm",
+        "focus-ring min-h-28 rounded-xl border border-stone-200 bg-white px-3 py-3 text-sm shadow-sm",
         props.className
       )}
       {...props}

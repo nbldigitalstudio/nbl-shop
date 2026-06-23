@@ -67,6 +67,8 @@ export type Order = {
   store_id: string;
   stripe_checkout_session_id: string | null;
   customer_email: string | null;
+  subtotal_cents: number;
+  shipping_amount_cents: number;
   amount_total_cents: number;
   application_fee_cents: number;
   status: OrderStatus;

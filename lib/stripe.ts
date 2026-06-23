@@ -7,7 +7,3 @@ export function getStripe() {
 
   return new Stripe(process.env.STRIPE_SECRET_KEY);
 }
-
-export function platformFee(amountCents: number, feePercent: number) {
-  return Math.round(amountCents * (feePercent / 100));
-}

@@ -2,8 +2,10 @@ export const dynamic = "force-dynamic";
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, CheckCircle2, ExternalLink, Mail, MapPin, Package, Truck } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Download, ExternalLink, Mail, MapPin, Package, Ship, Truck } from "lucide-react";
+import { updateOrderShipping } from "@/app/actions";
 import { Button } from "@/components/button";
+import { Field, Input } from "@/components/field";
 import { getOrderForUser } from "@/lib/data";
 import { formatMoney } from "@/lib/utils";
 
@@ -14,6 +16,12 @@ export default async function OrderDetailsPage({ params }: { params: { orderId: 
   const isPaid = order.payment_status === "paid";
   const isShipped = order.shipping_status === "shipped" || order.status === "fulfilled";
   const itemCount = order.order_items.reduce((total, item) => total + item.quantity, 0);
+  const itemSubtotal = order.order_items.reduce(
+    (total, item) => total + item.unit_amount_cents * item.quantity,
+    0
+  );
+  const subtotal = order.subtotal_cents ?? itemSubtotal;
+  const shippingAmount = order.shipping_amount_cents ?? Math.max(order.amount_total_cents - subtotal, 0);
 
   return (
     <div className="grid gap-6">
@@ -30,9 +38,13 @@ export default async function OrderDetailsPage({ params }: { params: { orderId: 
             </div>
             <p className="mt-2 text-sm text-gray-500">{new Intl.DateTimeFormat("es-PR", { dateStyle: "long", timeStyle: "short", timeZone: "America/Puerto_Rico" }).format(new Date(order.created_at))} · {order.stores.name}</p>
           </div>
-          <div className="text-right">
-            <Button disabled className="cursor-not-allowed opacity-50"><Truck className="size-4" />Crear envío</Button>
-            <p className="mt-2 text-xs text-gray-500">Disponible cuando conectemos Pirate Ship.</p>
+          <div className="flex flex-wrap gap-2 text-right">
+            <a href={`/api/orders/${order.id}/shipping/export`} className="focus-ring inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-rose-500 px-4 text-sm font-semibold text-white shadow-sm shadow-rose-200 transition hover:bg-rose-600">
+              <Download className="size-4" /> Exportar para Pirate Ship
+            </a>
+            <a href="https://ship.pirateship.com/ship" target="_blank" rel="noreferrer" className="focus-ring inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-white px-4 text-sm font-semibold text-ink ring-1 ring-stone-200 transition hover:bg-rose-50">
+              <Ship className="size-4" /> Abrir Pirate Ship
+            </a>
           </div>
         </div>
       </div>
@@ -59,8 +71,8 @@ export default async function OrderDetailsPage({ params }: { params: { orderId: 
               ))}
             </div>
             <div className="border-t border-gray-200 bg-gray-50 px-5 py-4">
-              <div className="flex justify-between text-sm text-gray-600"><span>Subtotal</span><span>{formatMoney(order.amount_total_cents)}</span></div>
-              <div className="mt-2 flex justify-between text-sm text-gray-600"><span>Envío</span><span>Incluido</span></div>
+              <div className="flex justify-between text-sm text-gray-600"><span>Subtotal</span><span>{formatMoney(subtotal)}</span></div>
+              <div className="mt-2 flex justify-between text-sm text-gray-600"><span>Shipping cobrado</span><span>{formatMoney(shippingAmount)}</span></div>
               <div className="mt-4 flex justify-between border-t border-gray-200 pt-4 text-base font-bold"><span>Total</span><span>{formatMoney(order.amount_total_cents)}</span></div>
             </div>
           </section>
@@ -96,6 +108,49 @@ export default async function OrderDetailsPage({ params }: { params: { orderId: 
                 {order.shipping_country}
               </address>
             ) : <p className="mt-4 text-sm text-gray-500">Esta orden no tiene una dirección registrada.</p>}
+          </section>
+
+          <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+            <div className="flex items-center justify-between"><h2 className="font-bold">Estado de envío</h2><Truck className="size-4 text-gray-400" /></div>
+            <div className="mt-4 rounded-lg bg-gray-50 p-4 text-sm">
+              <p className="font-semibold">{isShipped ? "Enviado" : "Por preparar"}</p>
+              {order.tracking_number ? <p className="mt-1 text-gray-500">Tracking: {order.tracking_number}</p> : <p className="mt-1 text-gray-500">Aún no hay tracking registrado.</p>}
+              {order.shipping_carrier ? <p className="mt-1 text-gray-500">{order.shipping_carrier}{order.shipping_service ? ` · ${order.shipping_service}` : ""}</p> : null}
+              {order.shipping_label_url ? <a href={order.shipping_label_url} target="_blank" rel="noreferrer" className="mt-2 inline-flex font-semibold text-blue-600 hover:underline">Ver etiqueta <ExternalLink className="ml-1 size-3.5" /></a> : null}
+            </div>
+          </section>
+
+          <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+            <h2 className="font-bold">Crear etiqueta en Pirate Ship</h2>
+            <p className="mt-2 text-sm leading-6 text-gray-500">Descarga el CSV, súbelo a Pirate Ship, compra la etiqueta y luego pega el tracking aquí.</p>
+            <div className="mt-4 grid gap-2">
+              <a href={`/api/orders/${order.id}/shipping/export`} className="focus-ring inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-rose-500 px-4 text-sm font-semibold text-white shadow-sm shadow-rose-200 transition hover:bg-rose-600">
+                <Download className="size-4" /> Exportar CSV
+              </a>
+              <a href="https://ship.pirateship.com/ship" target="_blank" rel="noreferrer" className="focus-ring inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-white px-4 text-sm font-semibold text-ink ring-1 ring-stone-200 transition hover:bg-rose-50">
+                <ExternalLink className="size-4" /> Abrir Pirate Ship
+              </a>
+            </div>
+          </section>
+
+          <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+            <h2 className="font-bold">Agregar tracking</h2>
+            <form action={updateOrderShipping} className="mt-4 grid gap-3">
+              <input type="hidden" name="order_id" value={order.id} />
+              <Field label="Carrier">
+                <Input name="carrier" required defaultValue={order.shipping_carrier ?? ""} placeholder="USPS, UPS..." />
+              </Field>
+              <Field label="Servicio">
+                <Input name="service" defaultValue={order.shipping_service ?? ""} placeholder="Ground Advantage, Priority Mail..." />
+              </Field>
+              <Field label="Tracking number">
+                <Input name="tracking_number" required defaultValue={order.tracking_number ?? ""} />
+              </Field>
+              <Field label="URL de etiqueta (opcional)">
+                <Input name="shipping_label_url" type="url" defaultValue={order.shipping_label_url ?? ""} placeholder="https://..." />
+              </Field>
+              <Button type="submit"><Truck className="size-4" /> Marcar como enviado</Button>
+            </form>
           </section>
 
           <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">

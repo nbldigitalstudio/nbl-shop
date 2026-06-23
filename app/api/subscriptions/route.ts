@@ -13,6 +13,33 @@ import { getAppUrl } from "@/lib/url";
 const planSchema = z.enum(["basic", "pro"]);
 const intervalSchema = z.enum(["month", "year"]);
 const storeIdSchema = z.string().uuid();
+const promoCodeSchema = z.string().trim().min(1).max(100);
+
+export async function POST(request: NextRequest) {
+  const supabase = createSupabaseRouteClient();
+  const { data } = await supabase.auth.getUser();
+  if (!data.user) {
+    return NextResponse.json({ error: "Debes iniciar sesión para validar el código." }, { status: 401 });
+  }
+
+  const payload = await request.json().catch(() => null);
+  const parsedCode = promoCodeSchema.safeParse(payload?.promoCode);
+  if (!parsedCode.success) {
+    return NextResponse.json({ error: "Este código no es válido o expiró." }, { status: 400 });
+  }
+
+  const code = parsedCode.data.toUpperCase();
+  const discount = await resolveCheckoutDiscount(getStripe(), code);
+  if (!discount) {
+    return NextResponse.json({ error: "Este código no es válido o expiró." }, { status: 400 });
+  }
+
+  return NextResponse.json({
+    valid: true,
+    code,
+    message: code === "2MONTHPASS" ? "Código aplicado: 2 meses gratis." : `Código aplicado: ${code}.`
+  });
+}
 
 export async function GET(request: NextRequest) {
   const appUrl = getAppUrl(request.nextUrl.origin);
@@ -40,7 +67,7 @@ export async function GET(request: NextRequest) {
   const promoCode = request.nextUrl.searchParams.get("promoCode")?.trim();
   const discount = await resolveCheckoutDiscount(stripe, promoCode);
   if (promoCode && !discount) {
-    return NextResponse.redirect(`${appUrl}/dashboard/billing?error=${encodeURIComponent("Código de descuento inválido")}`);
+    return NextResponse.redirect(`${appUrl}/dashboard/billing?error=${encodeURIComponent("Este código no es válido o expiró.")}`);
   }
 
   const session = await stripe.checkout.sessions.create({

@@ -5,6 +5,7 @@ import Image from "next/image";
 import { Minus, Plus, ShoppingBag, ShoppingCart, Trash2 } from "lucide-react";
 import { Button } from "@/components/button";
 import type { Product, Store } from "@/lib/types";
+import { calculateShippingAmountCents } from "@/lib/shipping";
 import { formatMoney } from "@/lib/utils";
 
 type CartItem = {
@@ -14,7 +15,7 @@ type CartItem = {
 
 export function Storefront({ store, products }: { store: Store; products: Product[] }) {
   const [cart, setCart] = useState<CartItem[]>([]);
-  const total = useMemo(
+  const subtotal = useMemo(
     () =>
       cart.reduce((sum, item) => {
         const product = products.find((candidate) => candidate.id === item.productId);
@@ -22,6 +23,8 @@ export function Storefront({ store, products }: { store: Store; products: Produc
       }, 0),
     [cart, products]
   );
+  const shipping = cart.length ? calculateShippingAmountCents(subtotal) : 0;
+  const total = subtotal + shipping;
 
   function add(product: Product) {
     setCart((current) => {
@@ -53,15 +56,15 @@ export function Storefront({ store, products }: { store: Store; products: Produc
   }
 
   return (
-    <section className="mx-auto grid max-w-7xl gap-8 px-4 py-10 sm:px-6 lg:grid-cols-[1fr_360px] lg:px-8">
+    <section className="mx-auto grid max-w-7xl gap-8 px-4 py-12 sm:px-6 lg:grid-cols-[1fr_380px] lg:px-8">
       <div>
         <div className="mb-6 flex items-center justify-between">
-          <h2 className="text-2xl font-black">Products</h2>
-          <span className="text-sm font-semibold text-ink/55">{products.length} available</span>
+          <div><p className="text-xs font-black uppercase tracking-[.18em] text-rose-500">Hecho y elegido para ti</p><h2 className="mt-1 text-3xl font-black">Nuestros productos</h2></div>
+          <span className="rounded-full bg-white px-3 py-1.5 text-sm font-semibold text-ink/55 shadow-sm">{products.length} disponibles</span>
         </div>
         <div className="grid gap-5 sm:grid-cols-2">
           {products.map((product) => (
-            <article key={product.id} className="overflow-hidden rounded-lg border border-ink/10 bg-[#fbfaf7]">
+            <article key={product.id} className="overflow-hidden rounded-[1.5rem] border border-stone-100 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-soft">
               <div className="relative aspect-[4/3] bg-ink/[0.04]">
                 {product.image_url ? (
                   <Image src={product.image_url} alt={product.name} fill className="object-cover" />
@@ -71,25 +74,25 @@ export function Storefront({ store, products }: { store: Store; products: Produc
                   </div>
                 )}
               </div>
-              <div className="grid gap-3 p-4">
+              <div className="grid gap-3 p-5">
                 <div className="flex items-start justify-between gap-3">
                   <h3 className="font-black">{product.name}</h3>
                   <p className="font-black">{formatMoney(product.price_cents)}</p>
                 </div>
                 <p className="min-h-12 text-sm leading-6 text-ink/65">{product.description}</p>
                 <Button type="button" className="w-full" style={{ backgroundColor: store.theme_color }} onClick={() => add(product)}>
-                  Add to cart
+                  Añadir al carrito
                 </Button>
               </div>
             </article>
           ))}
         </div>
-        {!products.length ? <p className="rounded-lg bg-[#fbfaf7] p-6 text-sm text-ink/60">This store has no available products yet.</p> : null}
+        {!products.length ? <p className="rounded-2xl bg-white p-6 text-sm text-ink/60 shadow-sm">Esta tienda está preparando sus primeros productos.</p> : null}
       </div>
-      <aside className="h-fit rounded-lg border border-ink/10 bg-white p-5 shadow-sm lg:sticky lg:top-5">
+      <aside className="h-fit rounded-[1.5rem] border border-rose-100 bg-white p-6 shadow-soft lg:sticky lg:top-5">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-black">Cart</h2>
-          <ShoppingCart className="size-5 text-mint" />
+          <div><p className="text-xs font-black uppercase tracking-wider text-rose-500">Tu selección</p><h2 className="text-xl font-black">Carrito</h2></div>
+          <span className="grid size-10 place-items-center rounded-xl bg-rose-50 text-rose-500"><ShoppingCart className="size-5" /></span>
         </div>
         <div className="mt-5 grid gap-3">
           {cart.map((item) => {
@@ -97,7 +100,7 @@ export function Storefront({ store, products }: { store: Store; products: Produc
             if (!product) return null;
 
             return (
-              <div key={item.productId} className="rounded-md bg-ink/[0.03] p-3">
+              <div key={item.productId} className="rounded-xl bg-stone-50 p-3">
                 <div className="flex justify-between gap-3">
                   <p className="font-semibold">{product.name}</p>
                   <p className="font-black">{formatMoney(product.price_cents * item.quantity)}</p>
@@ -119,19 +122,30 @@ export function Storefront({ store, products }: { store: Store; products: Produc
               </div>
             );
           })}
-          {!cart.length ? <p className="text-sm text-ink/60">Add products to start checkout.</p> : null}
+          {!cart.length ? <p className="rounded-xl bg-stone-50 p-4 text-sm leading-6 text-ink/60">Añade algo que te encante para comenzar tu compra.</p> : null}
         </div>
-        <div className="mt-5 flex items-center justify-between border-t border-ink/10 pt-4">
-          <span className="font-semibold">Total</span>
-          <span className="text-xl font-black">{formatMoney(total)}</span>
+        <div className="mt-5 grid gap-2 border-t border-ink/10 pt-4 text-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-ink/65">Subtotal</span>
+            <span className="font-semibold">{formatMoney(subtotal)}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-ink/65">Shipping</span>
+            <span className="font-semibold">{cart.length ? formatMoney(shipping) : "—"}</span>
+          </div>
+          <div className="mt-2 flex items-center justify-between border-t border-ink/10 pt-3">
+            <span className="font-semibold">Total de tu compra</span>
+            <span className="text-xl font-black">{formatMoney(total)}</span>
+          </div>
         </div>
         <form action="/api/checkout" method="POST" className="mt-5">
           <input type="hidden" name="store_id" value={store.id} />
           <input type="hidden" name="cart" value={JSON.stringify(cart)} />
           <Button type="submit" disabled={!cart.length} className="w-full" style={{ backgroundColor: store.theme_color }}>
-            Checkout
+            Ir a pagar de forma segura
           </Button>
         </form>
+        <p className="mt-3 text-center text-xs text-stone-400">Pago seguro procesado por Stripe</p>
       </aside>
     </section>
   );

@@ -8,12 +8,14 @@ import {
   getActiveSubscriptionPlan,
   getCurrentUser,
   getMyStore,
+  getOrderForUser,
   getProducts,
   getStoreForUser,
 } from "@/lib/data";
 
 import { canAddProduct } from "@/lib/plans";
 import { isFounderEmail } from "@/lib/access";
+import { sendOrderShippedEmail, sendStoreInvitationEmail } from "@/lib/email";
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
 import type { StoreRole } from "@/lib/types";
 import { getAppUrl } from "@/lib/url";
@@ -188,6 +190,12 @@ export async function inviteStoreMember(formData: FormData) {
     console.warn("Supabase invitation email could not be sent:", invite.error.message);
   }
 
+  await sendStoreInvitationEmail({
+    to: email,
+    storeName: store.name,
+    role,
+  });
+
   revalidatePath(`/dashboard/stores/${storeId}/settings`);
 }
 
@@ -250,6 +258,62 @@ export async function redeemGraceCode(formData: FormData) {
     admin.from("billing_codes").update({ redemption_count: billingCode.redemption_count + 1 }).eq("id", billingCode.id)
   ]);
   revalidatePath("/dashboard/billing");
+}
+
+/* =========================
+   SHIPPING
+========================= */
+
+export async function updateOrderShipping(formData: FormData) {
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+
+  const orderId = formString(formData, "order_id");
+  const trackingNumber = formString(formData, "tracking_number");
+  const carrier = formString(formData, "carrier");
+  const service = formString(formData, "service");
+  const labelUrl = formString(formData, "shipping_label_url");
+
+  if (!orderId || !trackingNumber || !carrier) {
+    throw new Error("Order, carrier and tracking number are required");
+  }
+
+  const order = await getOrderForUser(orderId);
+  if (!order) throw new Error("Order not found");
+
+  const admin = createSupabaseAdminClient();
+  const { error } = await admin
+    .from("orders")
+    .update({
+      shipping_status: "shipped",
+      status: "fulfilled",
+      tracking_number: trackingNumber,
+      shipping_carrier: carrier,
+      shipping_service: service,
+      shipping_label_url: labelUrl,
+      shipped_at: new Date().toISOString(),
+    })
+    .eq("id", order.id);
+
+  if (error) throw error;
+
+  await sendOrderShippedEmail({
+    orderId: order.id,
+    storeName: order.stores.name,
+    storeSlug: order.stores.slug,
+    customerName: order.shipping_name,
+    customerEmail: order.customer_email,
+    subtotalCents: order.subtotal_cents,
+    shippingAmountCents: order.shipping_amount_cents,
+    totalCents: order.amount_total_cents,
+    trackingNumber,
+    carrier,
+    service,
+  });
+
+  revalidatePath("/dashboard/orders");
+  revalidatePath(`/dashboard/orders/${order.id}`);
+  revalidatePath(`/dashboard/stores/${order.store_id}`);
 }
 
 /* =========================

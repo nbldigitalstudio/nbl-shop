@@ -19,6 +19,13 @@ STRIPE_BASIC_YEARLY_PRICE_ID=price_1Tj3is1T4SMhAt1HjnFcZEtB
 STRIPE_PRO_MONTHLY_PRICE_ID=price_1Tb9PR1T4SMhAt1HKEGWplPL
 STRIPE_PRO_YEARLY_PRICE_ID=price_1Tj3l31T4SMhAt1HjP26JWjY
 FOUNDER_EMAILS=nbldigitalstudio@gmail.com
+RESEND_API_KEY=
+EMAIL_FROM="NBL Shop <hello@nblshop.com>"
+EMAIL_REPLY_TO=nbldigitalstudio@gmail.com
+PIRATE_SHIP_DEFAULT_WEIGHT_OZ=8
+PIRATE_SHIP_DEFAULT_LENGTH=8
+PIRATE_SHIP_DEFAULT_WIDTH=6
+PIRATE_SHIP_DEFAULT_HEIGHT=2
 ```
 
 Never expose `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY` or `STRIPE_WEBHOOK_SECRET` as `NEXT_PUBLIC_*` variables.
@@ -63,9 +70,14 @@ Never expose `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY` or `STRIPE_WEBHOOK
 - Confirm the Stripe webhook returns HTTP 200.
 - Confirm `orders`, `order_items`, payment status and inventory.
 - Open the order in the Orders Dashboard.
+- Confirm subtotal, shipping and total are correct.
+- Export a Pirate Ship CSV from the order.
+- Add manual tracking and mark the order as shipped.
+- Open `/store/demo-boutique`.
+- Confirm the landing button "Ver tienda demo" opens the demo store.
+- If Resend is configured, confirm transactional emails are received.
 - Confirm a late billing status displays a notice without blocking access or checkout.
 
 ## Deferred
 
-- Pirate Ship integration.
 - Delete-store workflow.

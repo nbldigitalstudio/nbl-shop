@@ -71,6 +71,8 @@ create table public.orders (
   store_id uuid not null references public.stores(id) on delete cascade,
   stripe_checkout_session_id text unique,
   customer_email text,
+  subtotal_cents integer not null default 0 check (subtotal_cents >= 0),
+  shipping_amount_cents integer not null default 0 check (shipping_amount_cents >= 0),
   amount_total_cents integer not null default 0 check (amount_total_cents >= 0),
   application_fee_cents integer not null default 0 check (application_fee_cents >= 0),
   status order_status not null default 'pending',
@@ -97,6 +99,37 @@ create table public.order_items (
   product_id uuid references public.products(id) on delete set null,
   quantity integer not null check (quantity > 0),
   unit_amount_cents integer not null check (unit_amount_cents >= 0),
+  created_at timestamptz not null default now()
+);
+
+create table public.shipments (
+  id uuid primary key default gen_random_uuid(),
+  order_id uuid not null references public.orders(id) on delete cascade,
+  store_id uuid not null references public.stores(id) on delete cascade,
+  provider text not null default 'pirate_ship_csv',
+  status text not null default 'pending',
+  carrier text,
+  service text,
+  tracking_number text,
+  label_url text,
+  label_pdf_url text,
+  rate_cents integer not null default 0 check (rate_cents >= 0),
+  currency text not null default 'usd',
+  shipped_at timestamptz,
+  cancelled_at timestamptz,
+  raw_provider_data jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table public.shipment_packages (
+  id uuid primary key default gen_random_uuid(),
+  shipment_id uuid not null references public.shipments(id) on delete cascade,
+  weight_oz numeric not null default 8 check (weight_oz > 0),
+  length numeric not null default 8 check (length > 0),
+  width numeric not null default 6 check (width > 0),
+  height numeric not null default 2 check (height > 0),
+  package_type text not null default 'box',
   created_at timestamptz not null default now()
 );
 
@@ -171,6 +204,9 @@ create trigger products_set_updated_at before update on public.products
 for each row execute function public.set_updated_at();
 
 create trigger orders_set_updated_at before update on public.orders
+for each row execute function public.set_updated_at();
+
+create trigger shipments_set_updated_at before update on public.shipments
 for each row execute function public.set_updated_at();
 
 create trigger subscriptions_set_updated_at before update on public.subscriptions
@@ -281,6 +317,9 @@ create index products_active_stock_idx on public.products(store_id, active, stoc
 create index orders_store_id_created_at_idx on public.orders(store_id, created_at desc);
 create index orders_shipping_carrier_idx on public.orders(store_id, shipping_carrier, created_at desc);
 create index order_items_order_id_idx on public.order_items(order_id);
+create index shipments_order_id_idx on public.shipments(order_id);
+create index shipments_store_id_status_idx on public.shipments(store_id, status, created_at desc);
+create index shipment_packages_shipment_id_idx on public.shipment_packages(shipment_id);
 create index subscriptions_user_id_idx on public.subscriptions(user_id);
 create index subscriptions_store_id_idx on public.subscriptions(store_id, created_at desc);
 create index store_invitations_email_idx on public.store_invitations(lower(email), status);
@@ -292,6 +331,8 @@ alter table public.store_members enable row level security;
 alter table public.products enable row level security;
 alter table public.orders enable row level security;
 alter table public.order_items enable row level security;
+alter table public.shipments enable row level security;
+alter table public.shipment_packages enable row level security;
 alter table public.subscriptions enable row level security;
 alter table public.store_invitations enable row level security;
 alter table public.billing_codes enable row level security;
@@ -354,6 +395,17 @@ on public.order_items for select
 using (exists (
   select 1 from public.orders where orders.id = order_items.order_id
   and public.user_has_store_access(orders.store_id)
+));
+
+create policy "Assigned users can read shipments"
+on public.shipments for select
+using (public.user_has_store_access(store_id));
+
+create policy "Assigned users can read shipment packages"
+on public.shipment_packages for select
+using (exists (
+  select 1 from public.shipments where shipments.id = shipment_packages.shipment_id
+  and public.user_has_store_access(shipments.store_id)
 ));
 
 create policy "Users can read store subscriptions"
